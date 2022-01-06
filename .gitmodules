@@ -9,4 +9,8 @@
 [submodule "ccpp/physics"]
   path = ccpp/physics
   url = https://github.com/uturuncoglu/ccpp-physics
-  branch = feature/xgrid_5a20ea4 
+  branch = feature/xgrid 
+[submodule "upp"]
+  path = upp
+  url = https://github.com/NOAA-EMC/UPP
+  branch = develop
