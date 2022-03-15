@@ -25,6 +25,11 @@ if(DEBUG)
   # Enable verbose output from ccpp_prebuild.py
   set(_ccpp_verbose_arg "--verbose")
 endif()
+if(DEFINED ENV{ESMF_RUNTIME_PROFILE})
+  message(STATUS "ESMF_RUNTIME_PROFILE = $ENV{ESMF_RUNTIME_PROFILE} : activating ESMF profiling for CCPP")
+  # Enable profiling in auto-generated physics caps
+  set(_ccpp_profile_arg "--profile")
+endif()
 if(DEFINED CCPP_SUITES)
   set(_ccpp_suites_arg "--suites=${CCPP_SUITES}")
   message("Calling CCPP code generator (ccpp_prebuild.py) for suites ${_ccpp_suites_arg} ...")
@@ -35,6 +40,7 @@ execute_process(COMMAND ${Python_EXECUTABLE}
                         "framework/scripts/ccpp_prebuild.py"
                         "--config=config/ccpp_prebuild_config.py"
                         "--builddir=${CMAKE_CURRENT_BINARY_DIR}" ${_ccpp_suites_arg} ${_ccpp_debug_arg} ${_ccpp_verbose_arg}
+                        ${_ccpp_profile_arg}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                 OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/ccpp_prebuild.out
                 ERROR_FILE  ${CMAKE_CURRENT_BINARY_DIR}/ccpp_prebuild.err
@@ -116,7 +122,6 @@ add_library(
 
 # Compile GFS_diagnostics.F90 without optimization, this leads to out of memory errors on wcoss_dell_p3
 set_property(SOURCE driver/GFS_diagnostics.F90 APPEND_STRING PROPERTY COMPILE_FLAGS "-O0")
-
 
 target_link_libraries(fv3ccpp PUBLIC ccpp_framework)
 target_link_libraries(fv3ccpp PUBLIC ccpp_physics)
