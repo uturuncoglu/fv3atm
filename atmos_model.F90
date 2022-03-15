@@ -42,6 +42,7 @@ module atmos_model_mod
 
 !</DESCRIPTION>
 
+use ESMF,               only: ESMF_TraceRegionEnter, ESMF_TraceRegionExit
 use mpp_mod,            only: mpp_pe, mpp_root_pe, mpp_clock_id, mpp_clock_begin
 use mpp_mod,            only: mpp_clock_end, CLOCK_COMPONENT, MPP_CLOCK_SYNC
 use mpp_mod,            only: FATAL, mpp_min, mpp_max, mpp_error, mpp_chksum
@@ -260,8 +261,10 @@ subroutine update_atmos_radiation_physics (Atmos)
 
 !--- execute the atmospheric setup step
       call mpp_clock_begin(setupClock)
+      call ESMF_TraceRegionEnter('timestep_init')
       call CCPP_step (step="timestep_init", nblks=Atm_block%nblks, ierr=ierr)
       if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP timestep_init step failed')
+      call ESMF_TraceRegionExit('timestep_init')
 
       if (GFS_Control%do_sppt .or. GFS_Control%do_shum .or. GFS_Control%do_skeb .or. &
           GFS_Control%lndp_type > 0  .or. GFS_Control%do_ca .or. GFS_Control%do_spp) then
@@ -324,8 +327,10 @@ subroutine update_atmos_radiation_physics (Atmos)
       call mpp_clock_begin(radClock)
       ! Performance improvement. Only enter if it is time to call the radiation physics.
       if (GFS_control%lsswr .or. GFS_control%lslwr) then
+        call ESMF_TraceRegionEnter('radiation')
         call CCPP_step (step="radiation", nblks=Atm_block%nblks, ierr=ierr)
         if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP radiation step failed')
+        call ESMF_TraceRegionExit('radiation')
       endif
       call mpp_clock_end(radClock)
 
@@ -339,8 +344,10 @@ subroutine update_atmos_radiation_physics (Atmos)
 !--- execute the atmospheric physics step1 subcomponent (main physics driver)
 
       call mpp_clock_begin(physClock)
+      call ESMF_TraceRegionEnter('physics')
       call CCPP_step (step="physics", nblks=Atm_block%nblks, ierr=ierr)
       if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP physics step failed')
+      call ESMF_TraceRegionExit('physics')
       call mpp_clock_end(physClock)
 
       if (chksum_debug) then
@@ -356,8 +363,10 @@ subroutine update_atmos_radiation_physics (Atmos)
 !--- execute the atmospheric physics step2 subcomponent (stochastic physics driver)
 
         call mpp_clock_begin(physClock)
+        call ESMF_TraceRegionEnter('stochastics')
         call CCPP_step (step="stochastics", nblks=Atm_block%nblks, ierr=ierr)
         if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP stochastics step failed')
+        call ESMF_TraceRegionExit('stochastics')
         call mpp_clock_end(physClock)
 
       endif
@@ -371,8 +380,10 @@ subroutine update_atmos_radiation_physics (Atmos)
 
 !--- execute the atmospheric timestep finalize step
       call mpp_clock_begin(setupClock)
+      call ESMF_TraceRegionEnter('timestep_finalize')
       call CCPP_step (step="timestep_finalize", nblks=Atm_block%nblks, ierr=ierr)
       if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP timestep_finalize step failed')
+      call ESMF_TraceRegionExit('timestep_finalize')
       call mpp_clock_end(setupClock)
 
     endif
@@ -763,7 +774,9 @@ subroutine update_atmos_model_dynamics (Atmos)
 
     call set_atmosphere_pelist()
     call mpp_clock_begin(fv3Clock)
+    call ESMF_TraceRegionEnter('dynamics')
     call atmosphere_dynamics (Atmos%Time)
+    call ESMF_TraceRegionExit('dynamics')
     call mpp_clock_end(fv3Clock)
 
 end subroutine update_atmos_model_dynamics
