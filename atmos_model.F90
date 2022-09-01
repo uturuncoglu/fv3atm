@@ -110,7 +110,8 @@ use fv_moving_nest_main_mod, only: update_moving_nest, dump_moving_nest
 implicit none
 private
 
-public update_atmos_radiation_physics
+public update_atmos_radiation
+public update_atmos_physics
 public update_atmos_model_state
 public update_atmos_model_dynamics
 public atmos_model_init, atmos_model_end, atmos_data_type
@@ -221,7 +222,7 @@ character(len=128) :: tagname = '$Name$'
 contains
 
 !#######################################################################
-! <SUBROUTINE NAME="update_atmos_radiation_physics">
+! <SUBROUTINE NAME="update_atmos_radiation">
 !
 !<DESCRIPTION>
 !   Called every time step as the atmospheric driver to compute the
@@ -242,7 +243,7 @@ contains
 !   variable type are allocated for the global grid (without halo regions).
 ! </INOUT>
 
-subroutine update_atmos_radiation_physics (Atmos)
+subroutine update_atmos_radiation (Atmos)
 !-----------------------------------------------------------------------
   implicit none
   type (atmos_data_type), intent(in) :: Atmos
@@ -361,49 +362,79 @@ subroutine update_atmos_radiation_physics (Atmos)
         if (mpp_pe() == mpp_root_pe()) print *,'RADIATION STEP  ', GFS_control%kdt, GFS_control%fhour
         call FV3GFS_GFS_checksum(GFS_control, GFS_data, Atm_block)
       endif
+    endif
 
-      if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "physics driver"
+!-----------------------------------------------------------------------
+ end subroutine update_atmos_radiation
+! </SUBROUTINE>
+
+!#######################################################################
+! <SUBROUTINE NAME="update_atmos_physics">
+!
+!<DESCRIPTION>
+!   Called every time step as the atmospheric driver to compute the
+!   atmospheric physics.
+!</DESCRIPTION>
+
+!   <TEMPLATE>
+!     call  update_atmos_physics (Atmos)
+!   </TEMPLATE>
+
+! <INOUT NAME="Atmos" TYPE="type(atmos_data_type)">
+!   Derived-type variable that contains fields needed by the flux exchange module.
+!   These fields describe the atmospheric grid and are needed to
+!   compute/exchange fluxes with other component models.  All fields in this
+!   variable type are allocated for the global grid (without halo regions).
+! </INOUT>
+
+subroutine update_atmos_physics (Atmos)
+!-----------------------------------------------------------------------
+  implicit none
+  type (atmos_data_type), intent(in) :: Atmos
+!--- local variables---
+    integer :: idtend, itrac
+    integer :: nb, jdat(8), rc, ierr
+
+    if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "physics driver"
 
 !--- execute the atmospheric physics step1 subcomponent (main physics driver)
 
-      call mpp_clock_begin(physClock)
-      call CCPP_step (step="physics", nblks=Atm_block%nblks, ierr=ierr)
-      if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP physics step failed')
-      call mpp_clock_end(physClock)
+    call mpp_clock_begin(physClock)
+    call CCPP_step (step="physics", nblks=Atm_block%nblks, ierr=ierr)
+    if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP physics step failed')
+    call mpp_clock_end(physClock)
 
-      if (chksum_debug) then
-        if (mpp_pe() == mpp_root_pe()) print *,'PHYSICS STEP1   ', GFS_control%kdt, GFS_control%fhour
-        call FV3GFS_GFS_checksum(GFS_control, GFS_data, Atm_block)
-      endif
+    if (chksum_debug) then
+      if (mpp_pe() == mpp_root_pe()) print *,'PHYSICS STEP1   ', GFS_control%kdt, GFS_control%fhour
+      call FV3GFS_GFS_checksum(GFS_control, GFS_data, Atm_block)
+    endif
 
-      if (GFS_Control%do_sppt .or. GFS_Control%do_shum .or. GFS_Control%do_skeb .or. &
-          GFS_Control%lndp_type > 0  .or. GFS_Control%do_ca ) then
+    if (GFS_Control%do_sppt .or. GFS_Control%do_shum .or. GFS_Control%do_skeb .or. &
+        GFS_Control%lndp_type > 0  .or. GFS_Control%do_ca ) then
 
-        if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "stochastic physics driver"
+      if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "stochastic physics driver"
 
 !--- execute the atmospheric physics step2 subcomponent (stochastic physics driver)
 
-        call mpp_clock_begin(physClock)
-        call CCPP_step (step="stochastics", nblks=Atm_block%nblks, ierr=ierr)
-        if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP stochastics step failed')
-        call mpp_clock_end(physClock)
-
-      endif
-
-      if (chksum_debug) then
-        if (mpp_pe() == mpp_root_pe()) print *,'PHYSICS STEP2   ', GFS_control%kdt, GFS_control%fhour
-        call FV3GFS_GFS_checksum(GFS_control, GFS_data, Atm_block)
-      endif
-      call getiauforcing(GFS_control,IAU_data)
-      if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "end of radiation and physics step"
-
-!--- execute the atmospheric timestep finalize step
-      call mpp_clock_begin(setupClock)
-      call CCPP_step (step="timestep_finalize", nblks=Atm_block%nblks, ierr=ierr)
-      if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP timestep_finalize step failed')
-      call mpp_clock_end(setupClock)
+      call mpp_clock_begin(physClock)
+      call CCPP_step (step="stochastics", nblks=Atm_block%nblks, ierr=ierr)
+      if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP stochastics step failed')
+      call mpp_clock_end(physClock)
 
     endif
+
+    if (chksum_debug) then
+      if (mpp_pe() == mpp_root_pe()) print *,'PHYSICS STEP2   ', GFS_control%kdt, GFS_control%fhour
+      call FV3GFS_GFS_checksum(GFS_control, GFS_data, Atm_block)
+    endif
+    call getiauforcing(GFS_control,IAU_data)
+    if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "end of radiation and physics step"
+
+!--- execute the atmospheric timestep finalize step
+    call mpp_clock_begin(setupClock)
+    call CCPP_step (step="timestep_finalize", nblks=Atm_block%nblks, ierr=ierr)
+    if (ierr/=0)  call mpp_error(FATAL, 'Call to CCPP timestep_finalize step failed')
+    call mpp_clock_end(setupClock)
 
     ! Per-timestep diagnostics must be after physics but before
     ! flagging the first timestep.
@@ -415,7 +446,7 @@ subroutine update_atmos_radiation_physics (Atmos)
     GFS_control%first_time_step = .false.
 
 !-----------------------------------------------------------------------
- end subroutine update_atmos_radiation_physics
+ end subroutine update_atmos_physics
 ! </SUBROUTINE>
 
 

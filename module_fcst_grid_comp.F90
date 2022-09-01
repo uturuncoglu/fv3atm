@@ -31,7 +31,8 @@ if (rc /= ESMF_SUCCESS) write(0,*) 'rc=',rc,__FILE__,__LINE__; if(ESMF_LogFoundE
   use  atmos_model_mod,   only: atmos_model_init, atmos_model_end,         &
                                 get_atmos_model_ungridded_dim,             &
                                 update_atmos_model_dynamics,               &
-                                update_atmos_radiation_physics,            &
+                                update_atmos_radiation,                    &
+                                update_atmos_physics,                      &
                                 update_atmos_model_state,                  &
                                 atmos_data_type, atmos_model_restart,      &
                                 atmos_model_exchange_phase_1,              &
@@ -130,11 +131,19 @@ if (rc /= ESMF_SUCCESS) write(0,*) 'rc=',rc,__FILE__,__LINE__; if(ESMF_LogFoundE
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 !
     call ESMF_GridCompSetEntryPoint(fcst_comp, ESMF_METHOD_RUN, &
-                                    userRoutine=fcst_run_phase_1, phase=1, rc=rc)
+                                    userRoutine=fcst_run_phase_dyn, phase=1, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     call ESMF_GridCompSetEntryPoint(fcst_comp, ESMF_METHOD_RUN, &
-                                    userRoutine=fcst_run_phase_2, phase=2, rc=rc)
+                                    userRoutine=fcst_run_phase_rad, phase=2, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+    call ESMF_GridCompSetEntryPoint(fcst_comp, ESMF_METHOD_RUN, &
+                                    userRoutine=fcst_run_phase_phy, phase=3, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+    call ESMF_GridCompSetEntryPoint(fcst_comp, ESMF_METHOD_RUN, &
+                                    userRoutine=fcst_run_phase_upd, phase=4, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 !
     call ESMF_GridCompSetEntryPoint(fcst_comp, ESMF_METHOD_FINALIZE, &
@@ -1144,7 +1153,7 @@ if (rc /= ESMF_SUCCESS) write(0,*) 'rc=',rc,__FILE__,__LINE__; if(ESMF_LogFoundE
 !#######################################################################
 !-----------------------------------------------------------------------
 !
-   subroutine fcst_run_phase_1(fcst_comp, importState, exportState,clock,rc)
+   subroutine fcst_run_phase_dyn(fcst_comp, importState, exportState, clock, rc)
 !
 !-----------------------------------------------------------------------
 !***  the run step for the fcst gridded component.
@@ -1180,23 +1189,111 @@ if (rc /= ESMF_SUCCESS) write(0,*) 'rc=',rc,__FILE__,__LINE__; if(ESMF_LogFoundE
 
       call update_atmos_model_dynamics (Atmos)
 
-      call update_atmos_radiation_physics (Atmos)
-
-      call atmos_model_exchange_phase_1 (Atmos, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      if (mype == 0) write(*,'(A,I16,A,F16.6)')'PASS: fcstRUN phase 1, n_atmsteps = ', &
+      if (mype == 0) write(*,'(A,I16,A,F16.6)')'PASS: fcstRUN phase 1 (dyn), n_atmsteps = ', &
                                                n_atmsteps,' time is ',mpi_wtime()-tbeg1
 !
 !-----------------------------------------------------------------------
 !
-   end subroutine fcst_run_phase_1
+   end subroutine fcst_run_phase_dyn
+
+   subroutine fcst_run_phase_rad(fcst_comp, importState, exportState, clock, rc)
+!
+!-----------------------------------------------------------------------
+!***  the run step for the fcst gridded component.
+!-----------------------------------------------------------------------
+!
+      type(ESMF_GridComp)        :: fcst_comp
+      type(ESMF_State)           :: importState, exportState
+      type(ESMF_Clock)           :: clock
+      integer,intent(out)        :: rc
+!
+!***  local variables
+!
+      integer                    :: mype, seconds
+      real(kind=8)               :: mpi_wtime, tbeg1
+!
+!-----------------------------------------------------------------------
+!***********************************************************************
+!-----------------------------------------------------------------------
+!
+      tbeg1 = mpi_wtime()
+      rc    = ESMF_SUCCESS
+!
+!-----------------------------------------------------------------------
+!
+      call ESMF_GridCompGet(fcst_comp, localpet=mype, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+      call get_time(Atmos%Time - Atmos%Time_init, seconds)
+      n_atmsteps = seconds/dt_atmos
+!
+!-----------------------------------------------------------------------
+! *** call fcst integration subroutines
+
+      call update_atmos_radiation (Atmos)
+
+      if (mype == 0) write(*,'(A,I16,A,F16.6)')'PASS: fcstRUN phase 2 (rad), n_atmsteps = ', &
+                                               n_atmsteps,' time is ',mpi_wtime()-tbeg1
+!
+!-----------------------------------------------------------------------
+!
+   end subroutine fcst_run_phase_rad
 !
 !-----------------------------------------------------------------------
 !#######################################################################
 !-----------------------------------------------------------------------
 !
-   subroutine fcst_run_phase_2(fcst_comp, importState, exportState,clock,rc)
+   subroutine fcst_run_phase_phy(fcst_comp, importState, exportState, clock, rc)
+!
+!-----------------------------------------------------------------------
+!***  the run step for the fcst gridded component.
+!-----------------------------------------------------------------------
+!
+      type(ESMF_GridComp)        :: fcst_comp
+      type(ESMF_State)           :: importState, exportState
+      type(ESMF_Clock)           :: clock
+      integer,intent(out)        :: rc
+!
+!***  local variables
+!
+      integer                    :: mype, seconds
+      real(kind=8)               :: mpi_wtime, tbeg1
+!
+!-----------------------------------------------------------------------
+!***********************************************************************
+!-----------------------------------------------------------------------
+!
+      tbeg1 = mpi_wtime()
+      rc    = ESMF_SUCCESS
+!
+!-----------------------------------------------------------------------
+!
+      call ESMF_GridCompGet(fcst_comp, localpet=mype, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+      call get_time(Atmos%Time - Atmos%Time_init, seconds)
+      n_atmsteps = seconds/dt_atmos
+!
+!-----------------------------------------------------------------------
+! *** call fcst integration subroutines
+
+      call update_atmos_physics (Atmos)
+
+      call atmos_model_exchange_phase_1 (Atmos, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+      if (mype == 0) write(*,'(A,I16,A,F16.6)')'PASS: fcstRUN phase 3 (phy), n_atmsteps = ', &
+                                               n_atmsteps,' time is ',mpi_wtime()-tbeg1
+!
+!-----------------------------------------------------------------------
+!
+   end subroutine fcst_run_phase_phy
+!
+!-----------------------------------------------------------------------
+!#######################################################################
+!-----------------------------------------------------------------------
+!
+   subroutine fcst_run_phase_upd(fcst_comp, importState, exportState,clock,rc)
 !
 !-----------------------------------------------------------------------
 !***  the run step for the fcst gridded component.
@@ -1263,12 +1360,12 @@ if (rc /= ESMF_SUCCESS) write(0,*) 'rc=',rc,__FILE__,__LINE__; if(ESMF_LogFoundE
         endif
       endif
 
-      if (mype == 0) write(*,'(A,I16,A,F16.6)')'PASS: fcstRUN phase 2, n_atmsteps = ', &
+      if (mype == 0) write(*,'(A,I16,A,F16.6)')'PASS: fcstRUN phase 4 (upd), n_atmsteps = ', &
                                                n_atmsteps,' time is ',mpi_wtime()-tbeg1
 !
 !-----------------------------------------------------------------------
 !
-   end subroutine fcst_run_phase_2
+   end subroutine fcst_run_phase_upd
 !
 !-----------------------------------------------------------------------
 !#######################################################################
