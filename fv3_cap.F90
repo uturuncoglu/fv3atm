@@ -131,7 +131,7 @@ module fv3gfs_cap_mod
                               specPhaseLabel="phase2", specRoutine=ModelAdvance_phase2, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
-    ! setup Run/Advance phase: phase2
+    ! setup Run/Advance phase: phase3
     call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_RUN, &
                                  phaseLabelList=(/"phase3"/), userRoutine=routine_Run, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
@@ -140,13 +140,22 @@ module fv3gfs_cap_mod
                               specPhaseLabel="phase3", specRoutine=ModelAdvance_phase3, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
-    ! setup Run/Advance phase: phase2
+    ! setup Run/Advance phase: phase4
     call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_RUN, &
                                  phaseLabelList=(/"phase4"/), userRoutine=routine_Run, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     call NUOPC_CompSpecialize(gcomp, specLabel=label_Advance, &
                               specPhaseLabel="phase4", specRoutine=ModelAdvance_phase4, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+    ! setup Run/Advance phase: phase4
+    call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_RUN, &
+                                 phaseLabelList=(/"phase5"/), userRoutine=routine_Run, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+    call NUOPC_CompSpecialize(gcomp, specLabel=label_Advance, &
+                              specPhaseLabel="phase5", specRoutine=ModelAdvance_phase5, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     ! specializations to set fv3 cap run clock (model clock)
@@ -177,6 +186,10 @@ module fv3gfs_cap_mod
     call NUOPC_CompSpecialize(gcomp, specLabel=label_CheckImport, &
                               specPhaseLabel="phase4", specRoutine=NUOPC_NoOp, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+    call NUOPC_CompSpecialize(gcomp, specLabel=label_CheckImport, &
+                              specPhaseLabel="phase5", specRoutine=NUOPC_NoOp, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return 
 
     ! model finalize method(s)
     call NUOPC_CompSpecialize(gcomp, specLabel=label_Finalize, &
@@ -985,6 +998,9 @@ module fv3gfs_cap_mod
     call ModelAdvance_phase4(gcomp, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
+    call ModelAdvance_phase5(gcomp, rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
     if (profile_memory) call ESMF_VMLogMemInfo("Leaving FV3 ModelAdvance: ")
 
   end subroutine ModelAdvance
@@ -1143,19 +1159,11 @@ module fv3gfs_cap_mod
     integer, intent(out)        :: rc
 
     ! local variables
-    type(ESMF_Time)             :: currTime
-    type(ESMF_TimeInterval)     :: timeStep
-    type(ESMF_Time)             :: startTime
-    type(ESMF_TimeInterval)     :: time_elapsed
-
-    integer                     :: na, j, urc
-    integer                     :: nfseconds
+    type(ESMF_Clock)            :: clock
+    integer                     :: urc
     logical                     :: fcstpe
     character(len=*),parameter  :: subname='(fv3_cap:ModelAdvance_phase4)'
-
     character(240)              :: msgString
-
-    type(ESMF_Clock)            :: clock, clock_out
 
 !-----------------------------------------------------------------------------
 
@@ -1166,7 +1174,64 @@ module fv3gfs_cap_mod
     call ESMF_GridCompGet(gcomp, clock=clock, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
+    call ESMF_ClockPrint(clock, options="currTime", &
+                         preString="entering FV3_ADVANCE phase4 with clock current: ", &
+                         unit=msgString)
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
+    call ESMF_ClockPrint(clock, options="startTime", &
+                         preString="entering FV3_ADVANCE phase4 with clock start:   ", &
+                         unit=msgString)
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
+    call ESMF_ClockPrint(clock, options="stopTime", &
+                         preString="entering FV3_ADVANCE phase4 with clock stop:    ", &
+                         unit=msgString)
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
+
     call ESMF_GridCompRun(fcstComp, exportState=fcstState, clock=clock, phase=4, userRc=urc, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+    if (ESMF_LogFoundError(rcToCheck=urc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
+
+    if( dbug > 0 .or. cplprint_flag ) then
+         fcstpe = .false.
+         if( mype < num_pes_fcst ) fcstpe = .true.
+         call diagnose_cplFields(gcomp, clock, fcstpe, cplprint_flag, dbug, 'import')
+    endif
+
+    if (profile_memory) call ESMF_VMLogMemInfo("Leaving FV3 ModelAdvance_phase4: ")
+
+  end subroutine ModelAdvance_phase4
+
+!-----------------------------------------------------------------------------
+
+  subroutine ModelAdvance_phase5(gcomp, rc)
+    type(ESMF_GridComp)         :: gcomp
+    integer, intent(out)        :: rc
+
+    ! local variables
+    type(ESMF_Time)             :: currTime
+    type(ESMF_TimeInterval)     :: timeStep
+    type(ESMF_Time)             :: startTime
+    type(ESMF_TimeInterval)     :: time_elapsed
+
+    integer                     :: na, j, urc
+    integer                     :: nfseconds
+    logical                     :: fcstpe
+    character(len=*),parameter  :: subname='(fv3_cap:ModelAdvance_phase5)'
+
+    character(240)              :: msgString
+
+    type(ESMF_Clock)            :: clock, clock_out
+
+!-----------------------------------------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    if(profile_memory) call ESMF_VMLogMemInfo("Entering FV3 ModelAdvance_phase5: ")
+
+    call ESMF_GridCompGet(gcomp, clock=clock, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+    call ESMF_GridCompRun(fcstComp, exportState=fcstState, clock=clock, phase=5, userRc=urc, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
     if (ESMF_LogFoundError(rcToCheck=urc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
 
@@ -1240,15 +1305,15 @@ module fv3gfs_cap_mod
     endif ! quilting
 
     call ESMF_ClockPrint(clock, options="currTime", &
-                         preString="leaving FV3_ADVANCE phase4 with clock current: ", &
+                         preString="leaving FV3_ADVANCE phase5 with clock current: ", &
                          unit=msgString)
     call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
     call ESMF_ClockPrint(clock, options="startTime", &
-                         preString="leaving FV3_ADVANCE phase4 with clock start:   ", &
+                         preString="leaving FV3_ADVANCE phase5 with clock start:   ", &
                          unit=msgString)
     call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
     call ESMF_ClockPrint(clock, options="stopTime", &
-                         preString="leaving FV3_ADVANCE phase4 with clock stop:    ", &
+                         preString="leaving FV3_ADVANCE phase5 with clock stop:    ", &
                          unit=msgString)
     call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
 
@@ -1258,9 +1323,9 @@ module fv3gfs_cap_mod
       call diagnose_cplFields(gcomp, clock_out, fcstpe, cplprint_flag, dbug, 'export')
     end if
 
-    if(profile_memory) call ESMF_VMLogMemInfo("Leaving FV3 ModelAdvance_phase4: ")
+    if(profile_memory) call ESMF_VMLogMemInfo("Leaving FV3 ModelAdvance_phase5: ")
 
-  end subroutine ModelAdvance_phase4
+  end subroutine ModelAdvance_phase5
 
 !-----------------------------------------------------------------------------
 

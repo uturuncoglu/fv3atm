@@ -112,6 +112,7 @@ private
 
 public update_atmos_radiation
 public update_atmos_physics
+public update_atmos_stochastics
 public update_atmos_model_state
 public update_atmos_model_dynamics
 public atmos_model_init, atmos_model_end, atmos_data_type
@@ -233,7 +234,7 @@ contains
 !</DESCRIPTION>
 
 !   <TEMPLATE>
-!     call  update_atmos_radiation_physics (Atmos)
+!     call  update_atmos_radiation (Atmos)
 !   </TEMPLATE>
 
 ! <INOUT NAME="Atmos" TYPE="type(atmos_data_type)">
@@ -362,6 +363,8 @@ subroutine update_atmos_radiation (Atmos)
         if (mpp_pe() == mpp_root_pe()) print *,'RADIATION STEP  ', GFS_control%kdt, GFS_control%fhour
         call FV3GFS_GFS_checksum(GFS_control, GFS_data, Atm_block)
       endif
+
+      if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "end of radiation step"
     endif
 
 !-----------------------------------------------------------------------
@@ -409,6 +412,39 @@ subroutine update_atmos_physics (Atmos)
       call FV3GFS_GFS_checksum(GFS_control, GFS_data, Atm_block)
     endif
 
+    if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "end of physics step"
+
+!-----------------------------------------------------------------------
+ end subroutine update_atmos_physics
+! </SUBROUTINE>
+
+!#######################################################################
+! <SUBROUTINE NAME="update_atmos_stochastics">
+!
+!<DESCRIPTION>
+!   Called every time step as the atmospheric driver to compute the
+!   atmospheric stochastics physics.
+!</DESCRIPTION>
+
+!   <TEMPLATE>
+!     call  update_atmos_stochastics (Atmos)
+!   </TEMPLATE>
+
+! <INOUT NAME="Atmos" TYPE="type(atmos_data_type)">
+!   Derived-type variable that contains fields needed by the flux exchange module.
+!   These fields describe the atmospheric grid and are needed to
+!   compute/exchange fluxes with other component models.  All fields in this
+!   variable type are allocated for the global grid (without halo regions).
+! </INOUT>
+
+subroutine update_atmos_stochastics (Atmos)
+!-----------------------------------------------------------------------
+  implicit none
+  type (atmos_data_type), intent(in) :: Atmos
+!--- local variables---
+    integer :: idtend, itrac
+    integer :: nb, jdat(8), rc, ierr
+
     if (GFS_Control%do_sppt .or. GFS_Control%do_shum .or. GFS_Control%do_skeb .or. &
         GFS_Control%lndp_type > 0  .or. GFS_Control%do_ca ) then
 
@@ -427,8 +463,9 @@ subroutine update_atmos_physics (Atmos)
       if (mpp_pe() == mpp_root_pe()) print *,'PHYSICS STEP2   ', GFS_control%kdt, GFS_control%fhour
       call FV3GFS_GFS_checksum(GFS_control, GFS_data, Atm_block)
     endif
+
     call getiauforcing(GFS_control,IAU_data)
-    if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "end of radiation and physics step"
+    if (mpp_pe() == mpp_root_pe() .and. debug) write(6,*) "end of stochastic physics step"
 
 !--- execute the atmospheric timestep finalize step
     call mpp_clock_begin(setupClock)
@@ -446,9 +483,8 @@ subroutine update_atmos_physics (Atmos)
     GFS_control%first_time_step = .false.
 
 !-----------------------------------------------------------------------
- end subroutine update_atmos_physics
+ end subroutine update_atmos_stochastics
 ! </SUBROUTINE>
-
 
 !#######################################################################
 ! <SUBROUTINE NAME="atmos_timestep_diagnostics">
