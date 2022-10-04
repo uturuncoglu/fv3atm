@@ -89,6 +89,9 @@ TYPEDEFS_NEW_METADATA = {
         'ty_source_func_lw' : '',
         'mo_source_functions' : '',
         },
+    'noahmpdrv' : {
+        'noahmpdrv' : '',
+        },
     }
 
 # Add all physics scheme files relative to basedir
@@ -204,7 +207,6 @@ SCHEME_FILES = [
     'physics/physics/sfc_cice.f',
     'physics/physics/sfc_diff.f',
     'physics/physics/lsm_noah.f',
-    'physics/physics/noahmpdrv.F90',
     'physics/physics/flake_driver.F90',
     'physics/physics/sfc_nst_pre.f',
     'physics/physics/sfc_nst.f',
@@ -234,7 +236,9 @@ SCHEME_FILES = [
     'physics/physics/GFS_cloud_diagnostics.F90',
     'physics/physics/GFS_rrtmgp_cloud_mp.F90',
     'physics/physics/GFS_rrtmgp_cloud_overlap.F90',
-    'physics/physics/GFS_rrtmgp_sw_post.F90'
+    'physics/physics/GFS_rrtmgp_sw_post.F90',
+    # NOAHMP
+    'physics/physics/noahmp/drivers/ccpp/noahmpdrv.F90'
     ]
 
 # Default build dir, relative to current working directory,
