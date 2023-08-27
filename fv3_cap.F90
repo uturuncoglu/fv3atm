@@ -47,7 +47,9 @@ module fv3atm_cap_mod
 
   use module_cap_cpl,         only: diagnose_cplFields
 
+#ifdef CDEPS_INLINE
   use module_inline,          only: stream_init
+#endif
 
   implicit none
   private
@@ -1005,9 +1007,11 @@ module fv3atm_cap_mod
 
     if (ESMF_LogFoundError(rcToCheck=urc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__, rcToReturn=rc)) return
 
+#ifdef CDEPS_INLINE
     ! call inline Initialize
     call stream_init(fcstComp, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+#endif
 
   end subroutine InitializeRealize
 

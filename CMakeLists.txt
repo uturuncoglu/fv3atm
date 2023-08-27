@@ -78,6 +78,7 @@ endif()
 
 if(CDEPS_INLINE)
   list(APPEND cdeps_inline_srcs cpl/module_inline.F90)
+  add_definitions(-DCDEPS_INLINE)
 else()
   list(APPEND cdeps_inline_srcs "")
 endif()
