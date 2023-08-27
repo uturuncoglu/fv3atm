@@ -76,6 +76,13 @@ else()
    list(APPEND moving_nest_srcs "")
 endif()
 
+if(CDEPS_INLINE)
+  list(APPEND cdeps_inline_srcs cpl/module_inline.F90)
+  add_definitions(-DCDEPS_INLINE)
+else()
+  list(APPEND cdeps_inline_srcs "")
+endif()
+
 add_library(fv3atm
   atmos_model.F90
   fv3_cap.F90
@@ -98,10 +105,15 @@ add_library(fv3atm
   io/module_write_internal_state.F90
   io/module_wrt_grid_comp.F90
   ${moving_nest_srcs}
+  ${cdeps_inline_srcs}
   ${POST_SRC}
 )
 
 add_dependencies(fv3atm fv3 fv3ccpp stochastic_physics)
+
+if(CDEPS_INLINE)
+  add_dependencies(fv3atm cdeps::cdeps)
+endif()
 
 list(APPEND _fv3atm_defs_private GFS_PHYS
                                  INTERNAL_FILE_NML
@@ -133,6 +145,10 @@ endif()
 
 if(OPENMP)
   target_link_libraries(fv3atm PUBLIC OpenMP::OpenMP_Fortran)
+endif()
+
+if(CDEPS_INLINE)
+  target_link_libraries(fv3atm PUBLIC cdeps::cdeps)
 endif()
 
 ###############################################################################
