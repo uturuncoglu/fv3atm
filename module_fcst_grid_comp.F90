@@ -81,6 +81,7 @@ if (rc /= ESMF_SUCCESS) write(0,*) 'rc=',rc,__FILE__,__LINE__; if(ESMF_LogFoundE
   use CCPP_data,              only: GFS_control
 #ifdef CDEPS_INLINE
   use module_inline,          only: stream_init
+  use module_inline,          only: stream_run
 #endif
 !
 !-----------------------------------------------------------------------
@@ -1350,6 +1351,13 @@ if (rc /= ESMF_SUCCESS) write(0,*) 'rc=',rc,__FILE__,__LINE__; if(ESMF_LogFoundE
       else
         Atmos%isAtCapTime = .false.
       endif
+!
+!-----------------------------------------------------------------------
+!
+#ifdef CDEPS_INLINE
+    call stream_run(clock, rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+#endif
 !
 !-----------------------------------------------------------------------
 ! *** call fcst integration subroutines
