@@ -70,9 +70,6 @@ module module_inline
       mesh = ESMF_MeshCreate(grid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
-     h = ESMF_MeshCreate(grid, rc=rc)
-! create route handle from mesh to grid
-
       ! init pio
       call dshr_pio_init(comp, sdat, 6, rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
@@ -296,5 +293,4 @@ module module_inline
 
     end subroutine read_config
 
-      mesh = ESMF_MeshCreate(grid, rc=rc)
 end module module_inline
