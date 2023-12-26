@@ -10,6 +10,10 @@ module module_inline
   use dshr_strdata_mod, only: shr_strdata_type
   use dshr_strdata_mod, only: shr_strdata_init_from_inline
   use dshr_strdata_mod, only: shr_strdata_advance
+  use dshr_stream_mod , only: shr_stream_init_from_esmfconfig
+
+  use GFS_typedefs    , only: GFS_kind_phys => kind_phys
+  use CCPP_data       , only: GFS_control
 
   implicit none
 
@@ -17,30 +21,34 @@ module module_inline
   public stream_init
   public stream_run
 
-  type(ESMF_RouteHandle) :: rh_m2g ! routehandle to move data from mesh to grid
+  type(ESMF_Grid) :: grid
+  type(ESMF_Mesh) :: mesh
+  type(ESMF_Field) :: fgrid
 
-  type(shr_strdata_type) :: sdat   ! input data stream
-
-  type stream_config
-     character(len=ESMF_MAXSTR) :: stream_meshFile
-     character(len=ESMF_MAXSTR), allocatable :: stream_fileNames(:)
-     integer :: stream_yearFirst
-     integer :: stream_yearLast
-     integer :: stream_yearAlign
-     character(len=ESMF_MAXSTR), allocatable :: stream_fldListFile(:)
-     character(len=ESMF_MAXSTR), allocatable :: stream_fldListModel(:)
-     character(len=ESMF_MAXSTR) :: stream_levDimName
-     character(len=ESMF_MAXSTR) :: stream_mapAlgo
-     integer :: stream_offset
-     character(len=ESMF_MAXSTR) :: stream_taxMode
-     real(kind=8) :: stream_dtLimit
-     character(len=ESMF_MAXSTR) :: stream_tIntAlgo
-     character(len=ESMF_MAXSTR) :: stream_name
+  type config
+     integer :: year_first
+     integer :: year_last
+     integer :: year_align
+     integer :: offset
+     real(kind=8) :: dtlimit
+     character(len=ESMF_MAXSTR) :: mesh_filename
+     character(len=ESMF_MAXSTR), allocatable :: data_filename(:)
+     character(len=ESMF_MAXSTR), allocatable :: fld_list(:)
+     character(len=ESMF_MAXSTR), allocatable :: fld_list_model(:)
+     character(len=ESMF_MAXSTR) :: mapalgo
+     character(len=ESMF_MAXSTR) :: taxmode
+     character(len=ESMF_MAXSTR) :: tintalgo
      character(len=ESMF_MAXSTR) :: name
-  end type stream_config
-  type(stream_config) :: config
+  end type config
+
+  type(config) :: stream ! stream configuration
+  type(shr_strdata_type) :: sdat_config
+  type(shr_strdata_type), allocatable :: sdat(:) ! input data stream
+
+  real(kind=GFS_kind_phys), dimension(:,:), pointer  :: dataptr2d 
 
   integer :: dbug = 1
+  integer :: logunit = 6
 !
   contains
 
@@ -53,17 +61,16 @@ module module_inline
       type(ESMF_Clock)   , intent(in)  :: clock
       integer            , intent(out) :: rc
 
-      integer         :: localPet
-      type(ESMF_Grid) :: grid
-      type(ESMF_Mesh) :: mesh
+      ! local variables
       type(ESMF_ArraySpec) :: arraySpec
+      integer :: localPet
+      integer :: l, id, nstreams
+      integer :: isc, iec, jsc, jec
+      character(len=ESMF_MAXSTR) :: streamfilename, stream_name
+      character(len=ESMF_MAXSTR), allocatable :: file_list(:), var_list(:,:)
 
       ! query compontn to retrieve required information
       call ESMF_GridCompGet(comp, grid=grid, localPet=localPet, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      ! read configuration
-      call read_config(rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
       ! create mesh from grid
@@ -71,31 +78,77 @@ module module_inline
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
       ! init pio
-      call dshr_pio_init(comp, sdat, 6, rc)
+      call dshr_pio_init(comp, sdat_config, logunit, rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
-      ! initialize the cdeps data type
-      call shr_strdata_init_from_inline(sdat, &
-                                        my_task             = localPet, &
-                                        logunit             = 6, &
-                                        compname            = 'ATM', &
-                                        model_clock         = clock, &
-                                        model_mesh          = mesh, &
-                                        stream_meshfile     = trim(config%stream_meshFile), &
-                                        stream_filenames    = config%stream_fileNames, &
-                                        stream_yearFirst    = config%stream_yearFirst, &
-                                        stream_yearLast     = config%stream_yearLast, &
-                                        stream_yearAlign    = config%stream_yearAlign, &
-                                        stream_fldlistFile  = config%stream_fldListFile, &
-                                        stream_fldListModel = config%stream_fldListModel, &
-                                        stream_lev_dimname  = trim(config%stream_levDimName), &
-                                        stream_mapalgo      = trim(config%stream_mapAlgo), &
-                                        stream_offset       = config%stream_offset, &
-                                        stream_taxmode      = trim(config%stream_taxMode), &
-                                        stream_dtlimit      = config%stream_dtLimit, &
-                                        stream_tintalgo     = trim(config%stream_tIntAlgo), &
-                                        stream_name         = trim(config%stream_name), &
-                                        rc                  = rc) 
+      ! read stream configuration file
+      streamfilename = 'stream.config' 
+      call shr_stream_init_from_esmfconfig(streamfilename, sdat_config%stream, logunit, &
+          sdat_config%pio_subsystem, sdat_config%io_type, sdat_config%io_format, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+      ! get number of streams
+      nstreams = size(sdat_config%stream)
+
+      ! allocate stream data type
+      if (.not. allocated(sdat)) allocate(sdat(nstreams))
+
+      ! loop over streams and init
+      do id = 1, nstreams
+         ! set pio related variables 
+         sdat(id)%pio_subsystem => sdat_config%pio_subsystem
+         sdat(id)%io_type = sdat_config%io_type
+         sdat(id)%io_format = sdat_config%io_format
+
+         ! allocate temporary arrays
+         allocate(file_list(sdat_config%stream(id)%nfiles)) 
+         allocate(var_list(sdat_config%stream(id)%nvars,2))
+
+         ! fill variables
+         do l = 1, sdat_config%stream(id)%nfiles
+            file_list(l) = trim(sdat_config%stream(id)%file(l)%name)
+         end do
+         do l = 1, sdat_config%stream(id)%nvars
+            var_list(l,1) = trim(sdat_config%stream(id)%varlist(l)%nameinfile)
+            var_list(l,2) = trim(sdat_config%stream(id)%varlist(l)%nameinmodel)
+         end do
+
+         ! init stream
+         write(stream_name,fmt='(a,i2.2)') 'stream_', id
+         call shr_strdata_init_from_inline(sdat(id), &
+            my_task=localPet, logunit=logunit, &
+            compname = 'cmeps', model_clock=clock, model_mesh=mesh, &
+            stream_meshfile=trim(sdat_config%stream(id)%meshfile), &
+            stream_filenames=file_list, &
+            stream_yearFirst=sdat_config%stream(id)%yearFirst, &
+            stream_yearLast=sdat_config%stream(id)%yearLast, &
+            stream_yearAlign=sdat_config%stream(id)%yearAlign, &
+            stream_fldlistFile=var_list(:,1), &
+            stream_fldListModel=var_list(:,2), &
+            stream_lev_dimname=trim(sdat_config%stream(id)%lev_dimname), &
+            stream_mapalgo=trim(sdat_config%stream(id)%mapalgo), &
+            stream_offset=sdat_config%stream(id)%offset, &
+            stream_taxmode=trim(sdat_config%stream(id)%taxmode), &
+            stream_dtlimit=sdat_config%stream(id)%dtlimit, &
+            stream_tintalgo=trim(sdat_config%stream(id)%tInterpAlgo), &
+            stream_name=trim(stream_name), &
+            stream_src_mask=sdat_config%stream(id)%src_mask_val, &
+            stream_dst_mask=sdat_config%stream(id)%dst_mask_val, &
+            rc=rc)
+         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+         ! clean memory
+         deallocate(file_list)
+         deallocate(var_list)
+      end do
+
+      ! create temporary field on grid
+      isc = GFS_control%isc
+      iec = GFS_control%isc+GFS_control%nx-1
+      jsc = GFS_control%jsc
+      jec = GFS_control%jsc+GFS_control%ny-1
+      allocate(dataptr2d(isc:iec,jsc:jec))
+      fgrid = ESMF_FieldCreate(grid=grid, farrayPtr=dataptr2d, name='noname', rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     end subroutine stream_init
@@ -107,12 +160,14 @@ module module_inline
       type(ESMF_Clock)   , intent(in)  :: clock
       integer            , intent(out) :: rc
 
-      integer :: item
+      ! local variables
+      integer :: item, id, nstreams, nflds
       integer :: curr_ymd, sec
       integer :: year, month, day, hour, minute, second
-      character(len=ESMF_MAXSTR) :: filename
+      character(len=ESMF_MAXSTR) :: filename, istr
       type(ESMF_Time)  :: currTime
-      type(ESMF_Field) :: fgrid, fmesh
+      type(ESMF_Field) :: fmesh
+      type(ESMF_RouteHandle), save :: rh
 
       ! query clock
       call ESMF_ClockGet(clock, currTime=currTime, rc=rc)
@@ -125,172 +180,59 @@ module module_inline
       curr_ymd = abs(year)*10000+month*100+day
       sec = hour*3600+minute*60+second
 
-      ! run inline cdeps
-      call shr_strdata_advance(sdat, ymd=curr_ymd, tod=sec, logunit=6, istr='atm', rc=rc)      
+      ! get number of streams
+      nstreams = size(sdat)
 
-      ! loop over fields
-      do item = 1, size(config%stream_fldListFile)
-         ! get field on mesh
-         call ESMF_FieldBundleGet(sdat%pstrm(1)%fldbun_model, fieldName=trim(config%stream_fldListFile(item)), field=fmesh, rc=rc)
+      ! loop over streams and get data 
+      do id = 1, nstreams
+         ! advance cdeps inline
+         write(istr,fmt='(a,i2.2)') 'stream_', id
+         call shr_strdata_advance(sdat(id), ymd=curr_ymd, tod=sec, logunit=logunit, istr=trim(istr), rc=rc)      
          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
-         ! write field to check it
-         if (dbug > 0) then
-            write(filename, fmt='(a,i4,a1,i2.2,a1,i2.2,a1,i5.5)') trim(config%stream_fldListFile(item)), &
-               year, '-', month, '-', day, '-', sec
-            call ESMF_FieldWriteVTK(fmesh, trim(filename), rc=rc)
+         ! get number of fields in FB
+         nflds = size(sdat(id)%pstrm(1)%fldlist_model)
+
+         ! loop over fields
+         do item = 1, nflds
+            ! get field on mesh
+            call ESMF_FieldBundleGet(sdat(id)%pstrm(1)%fldbun_model, fieldName=trim(sdat(id)%pstrm(1)%fldlist_model(item)), field=fmesh, rc=rc)
             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-         end if
 
+            ! write field to check it
+            if (dbug > 0) then
+               write(filename, fmt='(a,i4,a1,i2.2,a1,i2.2,a1,i5.5)') trim(sdat(id)%pstrm(1)%fldlist_model(item))//'_', &
+                  year, '-', month, '-', day, '-', sec
+               call ESMF_FieldWriteVTK(fmesh, trim(filename), rc=rc)
+               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+            end if
 
+            ! create RH and destination field to transfer data from mesh to grid
+            if (.not. ESMF_RouteHandleIsCreated(rh, rc=rc)) then
+               ! create RH
+               call ESMF_FieldRedistStore(fmesh, fgrid, rh, ignoreUnmatchedIndices=.true., rc=rc) 
+               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+            end if
+
+            ! transfer data from mesh to grid
+            call ESMF_FieldRedist(fmesh, fgrid, rh, rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+            ! fill internal data structures
+            select case(trim(sdat(id)%pstrm(1)%fldlist_model(item)))
+               case ('So_t')
+            case default
+               write(logunit,*) 'Given field has no match in FV3! Please check configuration ...'
+            end select
+
+            ! diagnostic output
+            if (dbug > 0) then
+               write(logunit,'(A,3g14.7,i8)') '(cdeps inline): '//trim(sdat(id)%pstrm(1)%fldlist_model(item))//' ', &
+                  minval(dataptr2d), maxval(dataptr2d), sum(dataptr2d), size(dataptr2d)
+            end if
+         end do
       end do
-
 
     end subroutine stream_run
-
-  !-----------------------------------------------------------------------------
-
-    subroutine read_config(rc)
-      ! input/output variables
-      integer, intent(out) :: rc
-
-      ! local variables
-      type(ESMF_Config) :: cf
-      character(ESMF_MAXPATHLEN) :: fname
-      character(ESMF_MAXPATHLEN) :: MapAlgo(5)
-      character(ESMF_MAXPATHLEN) :: TaxMode(3)
-      character(ESMF_MAXPATHLEN) :: tIntAlgo(5)
-      integer :: item, line, lineCount, columnCount
-      logical :: found
-
-      rc = ESMF_SUCCESS
-
-      ! create ESMF config object to read in namelist options
-      cf = ESMF_ConfigCreate(rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      fname = "stream.cfg"
-      call ESMF_ConfigLoadFile(cf, fname, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      ! stream_meshFile
-      call ESMF_ConfigGetAttribute(cf, config%stream_meshFile, label='stream_meshFile:', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      ! stream_fileNames
-      call ESMF_ConfigGetDim(cf, lineCount, columnCount, label='stream_fileNames::', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      if (.not. allocated(config%stream_fileNames)) then
-         allocate(config%stream_filenames(lineCount))
-      end if
-
-      call ESMF_ConfigFindLabel(cf, 'stream_fileNames::', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      do line = 1, lineCount
-         call ESMF_ConfigNextLine(cf, rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-         call ESMF_ConfigGetAttribute(cf, config%stream_fileNames(line), rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-      end do
-
-      ! stream_yearFirst
-      call ESMF_ConfigGetAttribute(cf, config%stream_yearFirst, label='stream_yearFirst:', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      ! stream_yearLast
-      call ESMF_ConfigGetAttribute(cf, config%stream_yearLast, label='stream_yearLast:', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return 
-
-      ! stream_yearAlign
-      call ESMF_ConfigGetAttribute(cf, config%stream_yearAlign, label='stream_yearAlign:', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      ! stream_fldListFile and stream_fldListModel (both same)
-      call ESMF_ConfigGetDim(cf, lineCount, columnCount, label='stream_fldListFile::', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      if (.not. allocated(config%stream_fldListFile)) then
-         allocate(config%stream_fldListFile(lineCount))
-         allocate(config%stream_fldListModel(lineCount))
-      end if
-
-      call ESMF_ConfigFindLabel(cf, 'stream_fldListFile::', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      do line = 1, lineCount
-         call ESMF_ConfigNextLine(cf, rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
- 
-         call ESMF_ConfigGetAttribute(cf, config%stream_fldListFile(line), rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-         config%stream_fldListModel(line) = config%stream_fldListFile(line)
-      end do
-
-      ! stream_levDimName
-      call ESMF_ConfigGetAttribute(cf, config%stream_LevDimName, label='stream_levDimName:', default='null', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      ! stream_mapAlgo
-      call ESMF_ConfigGetAttribute(cf, config%stream_mapAlgo, label='stream_mapAlgo:', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      mapAlgo = (/ 'redist  ', 'nn      ', 'bilinear', 'constd  ', 'constf  ' /)
-      found = .false.
-      do item = 1, size(mapAlgo)
-         if (trim(config%stream_mapAlgo) == trim(mapAlgo(item))) found = .true.
-      end do
-      if (.not. found) then
-          call ESMF_LogWrite('Wrong stream_mapAlgo - '//trim(config%stream_mapAlgo)//'. The valid values are '// &
-             'redist, nn, bilinear, constd, constf.')
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-      end if
-
-      ! stream_Offset
-      call ESMF_ConfigGetAttribute(cf, config%stream_offset, label='stream_offset:', default=0, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      ! stream_TaxMode
-      call ESMF_ConfigGetAttribute(cf, config%stream_taxMode, label='stream_taxMode:', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      taxMode = (/ 'extend', 'cycle ', 'limit ' /)
-      found = .false.
-      do item = 1, size(taxMode)
-         if (trim(config%stream_taxMode) == trim(taxMode(item))) found = .true.
-      end do
-      if (.not. found) then
-          call ESMF_LogWrite('Wrong stream_taxMode - '//trim(config%stream_taxMode)//'. The valid values are '// &
-             'extend, cycle, limit.')
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-      end if
-
-      ! stream_dtLimit
-      call ESMF_ConfigGetAttribute(cf, config%stream_dtLimit, label='stream_dtLimit:', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      ! stream_tIntAlgo
-      call ESMF_ConfigGetAttribute(cf, config%stream_tIntAlgo, label='stream_tIntAlgo:', default='linear', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-      tIntAlgo = (/ 'lower  ', 'upper  ', 'nearest', 'linear ', 'coszen ' /)
-      found = .false.
-      do item = 1, size(tIntAlgo)
-         if (trim(config%stream_tIntAlgo) == trim(tIntAlgo(item))) found = .true.
-      end do
-      if (.not. found) then
-          call ESMF_LogWrite('Wrong stream_tIntAlgo - '//trim(config%stream_tIntAlgo)//'. The valid values are '// &
-             'lower, upper, nearest, linear, coszen.')
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-      end if
-
-      ! stream_name
-      call ESMF_ConfigGetAttribute(cf, config%stream_name, label='stream_name:', default='unknown', rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-    end subroutine read_config
 
 end module module_inline
