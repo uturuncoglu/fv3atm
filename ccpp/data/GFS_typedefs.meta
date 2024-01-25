@@ -3108,6 +3108,14 @@
   type = real
   kind = kind_phys
   active = (flag_for_rrtmgp_radiation_scheme)
+[tsfco_dat]
+  standard_name = sea_surface_temperature_from_data
+  long_name = sfc temperature
+  units = K
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  active = (do_cdeps_inline)
 
 ########################################################################
 [ccpp-table-properties]
@@ -3431,6 +3439,12 @@
 [use_med_flux]
   standard_name = do_mediator_atmosphere_ocean_fluxes
   long_name = flag for using atmosphere-ocean fluxes form mediator (default false)
+  units = flag
+  dimensions = ()
+  type = logical
+[use_inline]
+  standard_name = do_cdeps_inline
+  long_name = flag for using data provided by CDEPS inline (default false)
   units = flag
   dimensions = ()
   type = logical

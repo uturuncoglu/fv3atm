@@ -12,7 +12,7 @@ module module_inline
   use dshr_strdata_mod, only: shr_strdata_advance
   use dshr_stream_mod , only: shr_stream_init_from_esmfconfig
 
-  use GFS_typedefs    , only: GFS_kind_phys => kind_phys
+  use GFS_typedefs    , only: kp => kind_phys
   use CCPP_data       , only: GFS_control
 
   implicit none
@@ -45,10 +45,11 @@ module module_inline
   type(shr_strdata_type) :: sdat_config
   type(shr_strdata_type), allocatable :: sdat(:) ! input data stream
 
-  real(kind=GFS_kind_phys), dimension(:,:), pointer  :: dataptr2d 
+  real(kind=kp), dimension(:,:), pointer  :: dataptr2d 
 
   integer :: dbug = 1
   integer :: logunit = 6
+  real(kind=kp), parameter :: missing_value = 9.99e20_kp
 !
   contains
 
@@ -134,6 +135,7 @@ module module_inline
             stream_name=trim(stream_name), &
             stream_src_mask=sdat_config%stream(id)%src_mask_val, &
             stream_dst_mask=sdat_config%stream(id)%dst_mask_val, &
+            !stream_extrapalgo=trim(sdat_config%stream(id)%extrapalgo), &
             rc=rc)
          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
@@ -199,20 +201,16 @@ module module_inline
             call ESMF_FieldBundleGet(sdat(id)%pstrm(1)%fldbun_model, fieldName=trim(sdat(id)%pstrm(1)%fldlist_model(item)), field=fmesh, rc=rc)
             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
-            ! write field to check it
-            if (dbug > 0) then
-               write(filename, fmt='(a,i4,a1,i2.2,a1,i2.2,a1,i5.5)') trim(sdat(id)%pstrm(1)%fldlist_model(item))//'_', &
-                  year, '-', month, '-', day, '-', sec
-               call ESMF_FieldWriteVTK(fmesh, trim(filename), rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-            end if
-
             ! create RH and destination field to transfer data from mesh to grid
             if (.not. ESMF_RouteHandleIsCreated(rh, rc=rc)) then
                ! create RH
                call ESMF_FieldRedistStore(fmesh, fgrid, rh, ignoreUnmatchedIndices=.true., rc=rc) 
                if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
             end if
+
+            ! initialize destination field
+            call ESMF_FieldFill(fgrid, dataFillScheme="const", const1=missing_value, rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
             ! transfer data from mesh to grid
             call ESMF_FieldRedist(fmesh, fgrid, rh, rc=rc)
@@ -221,15 +219,31 @@ module module_inline
             ! fill internal data structures
             select case(trim(sdat(id)%pstrm(1)%fldlist_model(item)))
                case ('So_t')
+               
             case default
                write(logunit,*) 'Given field has no match in FV3! Please check configuration ...'
             end select
 
             ! diagnostic output
             if (dbug > 0) then
+               ! write statistics
                write(logunit,'(A,3g14.7,i8)') '(cdeps inline): '//trim(sdat(id)%pstrm(1)%fldlist_model(item))//' ', &
                   minval(dataptr2d), maxval(dataptr2d), sum(dataptr2d), size(dataptr2d)
             end if
+
+            !if (dbug > 5) then
+               ! file name
+               write(filename, fmt='(a,i4,a1,i2.2,a1,i2.2,a1,i5.5)') trim(sdat(id)%pstrm(1)%fldlist_model(item))//'_', &
+                  year, '-', month, '-', day, '-', sec
+
+               ! write field on mesh to VTK
+               !call ESMF_FieldWriteVTK(fmesh, trim(filename), rc=rc)
+               !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+               ! write field on grid to netCDF
+               call ESMF_FieldWrite(fgrid, fileName=trim(filename)//'.nc', rc=rc)
+               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+            !end if
          end do
       end do
 

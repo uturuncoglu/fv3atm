@@ -639,6 +639,9 @@ module GFS_typedefs
     !-- prognostic updraft area fraction coupling in convection
     real (kind=kind_phys), pointer :: dqdt_qmicro(:,:) => null()  !< instantanious microphysics tendency to be passed from MP to convection
 
+    !-- lake surface temperature from cdeps inline
+    real (kind=kind_phys), pointer :: tsfco_dat  (:) => null()   !< sfc temperature from cdeps inline
+
     contains
       procedure :: create  => coupling_create  !<   allocate array data
   end type GFS_coupling_type
@@ -739,6 +742,9 @@ module GFS_typedefs
     logical              :: cpl_imp_mrg     !< default no merge import with internal forcings
     logical              :: cpl_imp_dbg     !< default no write import data to file post merge
     logical              :: use_med_flux    !< default .false. - i.e. don't use atmosphere-ocean fluxes imported from mediator
+
+!--- cdeps inline parameters
+    logical              :: use_inline      !< default .false. - i.e. don't use data provided by CDEPS inline
 
 !--- integrated dynamics through earth's atmosphere
     logical              :: lsidea
@@ -3029,7 +3035,11 @@ module GFS_typedefs
       Coupling%slmsk_cpl   = clear_val  !< pointer to sfcprop%slmsk
     endif
 
-   !-- cellular automata
+    !-- cdeps inline
+    if (Model%use_inline) then
+    end if
+
+    !-- cellular automata
     allocate (Coupling%condition(IM))
     if (Model%do_ca) then
       allocate (Coupling%ca1      (IM))
@@ -3167,6 +3177,11 @@ module GFS_typedefs
       Coupling%qci_conv   = clear_val
     endif
 
+    if (Model%use_inline) then
+      allocate (Coupling%tsfco_dat(IM))
+      Coupling%tsfco_dat = clear_val
+    end if
+
   end subroutine coupling_create
 
 
@@ -3266,6 +3281,9 @@ module GFS_typedefs
     logical              :: cpl_imp_mrg    = .false.         !< default no merge import with internal forcings
     logical              :: cpl_imp_dbg    = .false.         !< default no write import data to file post merge
     logical              :: use_med_flux   = .false.         !< default no atmosphere-ocean fluxes from mediator
+
+    !--- cdeps inline parameters
+    logical              :: use_inline     = .false.         !< default no data from cdeps inline
 
 !--- integrated dynamics through earth's atmosphere
     logical              :: lsidea         = .false.
@@ -3898,6 +3916,8 @@ module GFS_typedefs
 #else
                                lsidea, use_med_flux,                                        &
 #endif
+                          !--- cdeps inline parameters
+                               use_inline,                                                  &
                           !--- radiation parameters
                                fhswr, fhlwr, levr, nfxr, iaerclm, iflip, isol, ico2, ialb,  &
                                isot, iems, iaer, icliq_sw, iovr, ictm, isubc_sw,            &
@@ -4237,6 +4257,9 @@ module GFS_typedefs
     Model%cpl_imp_mrg      = cpl_imp_mrg
     Model%cpl_imp_dbg      = cpl_imp_dbg
     Model%use_med_flux     = use_med_flux
+
+!--- cdeps inline parameters
+    Model%use_inline       = use_inline
 
 !--- RRFS-SD
     Model%rrfs_sd           = rrfs_sd
@@ -6361,6 +6384,7 @@ module GFS_typedefs
       print *, ' cpl_imp_mrg       : ', Model%cpl_imp_mrg
       print *, ' cpl_imp_dbg       : ', Model%cpl_imp_dbg
       print *, ' use_med_flux      : ', Model%use_med_flux
+      print *, ' use_inline        : ', Model%use_inline
       if(Model%imfdeepcnv == Model%imfdeepcnv_gf .or.Model%imfdeepcnv == Model%imfdeepcnv_c3) then
         print*,'ichoice_s          : ', Model%ichoice_s
         print*,'ichoicem           : ', Model%ichoicem
