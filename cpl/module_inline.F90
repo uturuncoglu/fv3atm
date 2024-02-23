@@ -13,7 +13,8 @@ module module_inline
   use dshr_stream_mod , only: shr_stream_init_from_esmfconfig
 
   use GFS_typedefs    , only: kp => kind_phys
-  use CCPP_data       , only: GFS_control
+  use CCPP_data       , only: GFS_control, GFS_data
+  use atmos_model_mod , only: setup_inlinedata
 
   implicit none
 
@@ -45,8 +46,6 @@ module module_inline
   type(shr_strdata_type) :: sdat_config
   type(shr_strdata_type), allocatable :: sdat(:) ! input data stream
 
-  real(kind=kp), dimension(:,:), pointer  :: dataptr2d 
-
   integer :: dbug = 1
   integer :: logunit = 6
   real(kind=kp), parameter :: missing_value = 9.99e20_kp
@@ -67,6 +66,7 @@ module module_inline
       integer :: localPet
       integer :: l, id, nstreams
       integer :: isc, iec, jsc, jec
+      real(kind=kp), dimension(:,:), pointer  :: dataptr2d
       character(len=ESMF_MAXSTR) :: streamfilename, stream_name
       character(len=ESMF_MAXSTR), allocatable :: file_list(:), var_list(:,:)
 
@@ -135,7 +135,6 @@ module module_inline
             stream_name=trim(stream_name), &
             stream_src_mask=sdat_config%stream(id)%src_mask_val, &
             stream_dst_mask=sdat_config%stream(id)%dst_mask_val, &
-            !stream_extrapalgo=trim(sdat_config%stream(id)%extrapalgo), &
             rc=rc)
          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
@@ -159,8 +158,8 @@ module module_inline
 
     subroutine stream_run(clock, rc)
       ! input/output variables
-      type(ESMF_Clock)   , intent(in)  :: clock
-      integer            , intent(out) :: rc
+      type(ESMF_Clock), intent(in)  :: clock
+      integer, intent(out) :: rc
 
       ! local variables
       integer :: item, id, nstreams, nflds
@@ -170,6 +169,7 @@ module module_inline
       type(ESMF_Time)  :: currTime
       type(ESMF_Field) :: fmesh
       type(ESMF_RouteHandle), save :: rh
+      real(kind=kp), dimension(:,:), pointer  :: dataptr2d
 
       ! query clock
       call ESMF_ClockGet(clock, currTime=currTime, rc=rc)
@@ -216,13 +216,12 @@ module module_inline
             call ESMF_FieldRedist(fmesh, fgrid, rh, rc=rc)
             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
+            ! get field
+            call ESMF_FieldGet(fgrid, farrayPtr=dataptr2d, localDE=0, rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
             ! fill internal data structures
-            select case(trim(sdat(id)%pstrm(1)%fldlist_model(item)))
-               case ('So_t')
-               
-            case default
-               write(logunit,*) 'Given field has no match in FV3! Please check configuration ...'
-            end select
+            call setup_inlinedata(trim(sdat(id)%pstrm(1)%fldlist_model(item)), dataptr2d, logunit)
 
             ! diagnostic output
             if (dbug > 0) then

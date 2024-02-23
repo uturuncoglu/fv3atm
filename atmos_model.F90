@@ -130,6 +130,7 @@ public get_atmos_model_ungridded_dim
 public atmos_model_get_nth_domain_info
 public addLsmask2grid
 public setup_exportdata
+public setup_inlinedata
 !-----------------------------------------------------------------------
 
 !<PUBLICTYPE >
@@ -2824,7 +2825,53 @@ end subroutine update_atmos_chemistry
     rc=0
 !
   end subroutine assign_importdata
+!
+  subroutine setup_inlinedata(fieldName, datar82d, logunit)
 
+    use ESMF, only: ESMF_KIND_R8
+
+    !--- arguments
+    character(len=*), intent(in) :: fieldName
+    real(kind=ESMF_KIND_R8), dimension(:,:), target, intent(in) :: datar82d
+    integer, intent(in) :: logunit
+
+    !--- local variables
+    integer :: i, j, ix, nb
+    integer :: isc, iec, jsc, jec
+
+! set up local dimension
+    isc = GFS_control%isc
+    iec = GFS_control%isc+GFS_control%nx-1
+    jsc = GFS_control%jsc
+    jec = GFS_control%jsc+GFS_control%ny-1
+
+! fill variables
+    select case(trim(fieldName))
+       case ('Si_ifrac')
+       case ('Si_vice')
+       case ('So_omask')
+!$omp parallel do default(shared) private(i,j,nb,ix)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = atm_block%blkno(i,j)
+                ix = atm_block%ixp(i,j)
+                GFS_data(nb)%Coupling%mask_dat(ix) = datar82d(i,j)
+             end do
+          end do
+       case ('So_t')
+!$omp parallel do default(shared) private(i,j,nb,ix)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = atm_block%blkno(i,j)
+                ix = atm_block%ixp(i,j)
+                GFS_data(nb)%Coupling%tsfco_dat(ix) = datar82d(i,j)
+             end do
+          end do
+       case default
+          write(logunit,*) trim(fieldName)//' can not be used by cdeps inline! Skipping field ...'
+    end select
+
+  end subroutine setup_inlinedata
 !
   subroutine setup_exportdata(rc)
 

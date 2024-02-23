@@ -640,6 +640,7 @@ module GFS_typedefs
     real (kind=kind_phys), pointer :: dqdt_qmicro(:,:) => null()  !< instantanious microphysics tendency to be passed from MP to convection
 
     !-- lake surface temperature from cdeps inline
+    real (kind=kind_phys), pointer :: mask_dat   (:) => null()   !< land-sea mask from cdeps inline  
     real (kind=kind_phys), pointer :: tsfco_dat  (:) => null()   !< sfc temperature from cdeps inline
 
     contains
@@ -3035,10 +3036,6 @@ module GFS_typedefs
       Coupling%slmsk_cpl   = clear_val  !< pointer to sfcprop%slmsk
     endif
 
-    !-- cdeps inline
-    if (Model%use_inline) then
-    end if
-
     !-- cellular automata
     allocate (Coupling%condition(IM))
     if (Model%do_ca) then
@@ -3180,6 +3177,8 @@ module GFS_typedefs
     if (Model%use_inline) then
       allocate (Coupling%tsfco_dat(IM))
       Coupling%tsfco_dat = clear_val
+      allocate (Coupling%mask_dat(IM))
+      Coupling%mask_dat = clear_val
     end if
 
   end subroutine coupling_create

@@ -205,7 +205,9 @@ SCHEME_FILES = [
     'physics/physics/GFS_cloud_diagnostics.F90',
     'physics/physics/GFS_rrtmgp_cloud_mp.F90',
     'physics/physics/GFS_rrtmgp_cloud_overlap.F90',
-    'physics/physics/GFS_rrtmgp_post.F90'
+    'physics/physics/GFS_rrtmgp_post.F90',
+    # CDEPS
+    'physics/physics/sfc_data.F'
     ]
 
 # Default build dir, relative to current working directory,

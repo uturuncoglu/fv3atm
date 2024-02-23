@@ -3116,6 +3116,14 @@
   type = real
   kind = kind_phys
   active = (do_cdeps_inline)
+[mask_dat]
+  standard_name = land_sea_mask_from_data 
+  long_name = landmask
+  units = flag
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  active = (do_cdeps_inline)
 
 ########################################################################
 [ccpp-table-properties]
