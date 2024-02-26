@@ -45,6 +45,7 @@ module module_inline
   type(config) :: stream ! stream configuration
   type(shr_strdata_type) :: sdat_config
   type(shr_strdata_type), allocatable :: sdat(:) ! input data stream
+  real(kind=kp), dimension(:,:), allocatable :: farray !dataptr2d
 
   integer :: dbug = 1
   integer :: logunit = 6
@@ -66,7 +67,6 @@ module module_inline
       integer :: localPet
       integer :: l, id, nstreams
       integer :: isc, iec, jsc, jec
-      real(kind=kp), dimension(:,:), pointer  :: dataptr2d
       character(len=ESMF_MAXSTR) :: streamfilename, stream_name
       character(len=ESMF_MAXSTR), allocatable :: file_list(:), var_list(:,:)
 
@@ -148,8 +148,8 @@ module module_inline
       iec = GFS_control%isc+GFS_control%nx-1
       jsc = GFS_control%jsc
       jec = GFS_control%jsc+GFS_control%ny-1
-      allocate(dataptr2d(isc:iec,jsc:jec))
-      fgrid = ESMF_FieldCreate(grid=grid, farrayPtr=dataptr2d, name='noname', rc=rc)
+      allocate(farray(isc:iec,jsc:jec))
+      fgrid = ESMF_FieldCreate(grid=grid, farray=farray, indexflag=ESMF_INDEX_DELOCAL, name='noname', rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     end subroutine stream_init
@@ -230,7 +230,7 @@ module module_inline
                   minval(dataptr2d), maxval(dataptr2d), sum(dataptr2d), size(dataptr2d)
             end if
 
-            !if (dbug > 5) then
+            if (dbug > 5) then
                ! file name
                write(filename, fmt='(a,i4,a1,i2.2,a1,i2.2,a1,i5.5)') trim(sdat(id)%pstrm(1)%fldlist_model(item))//'_', &
                   year, '-', month, '-', day, '-', sec
@@ -242,7 +242,7 @@ module module_inline
                ! write field on grid to netCDF
                call ESMF_FieldWrite(fgrid, fileName=trim(filename)//'.nc', rc=rc)
                if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-            !end if
+            end if
          end do
       end do
 

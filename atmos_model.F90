@@ -2855,7 +2855,7 @@ end subroutine update_atmos_chemistry
              do i = isc, iec
                 nb = atm_block%blkno(i,j)
                 ix = atm_block%ixp(i,j)
-                GFS_data(nb)%Coupling%mask_dat(ix) = datar82d(i,j)
+                GFS_data(nb)%Coupling%mask_dat(ix) = datar82d(i-isc+1,j-jsc+1)
              end do
           end do
        case ('So_t')
@@ -2864,7 +2864,7 @@ end subroutine update_atmos_chemistry
              do i = isc, iec
                 nb = atm_block%blkno(i,j)
                 ix = atm_block%ixp(i,j)
-                GFS_data(nb)%Coupling%tsfco_dat(ix) = datar82d(i,j)
+                GFS_data(nb)%Coupling%tsfco_dat(ix) = datar82d(i-isc+1,j-jsc+1)
              end do
           end do
        case default
