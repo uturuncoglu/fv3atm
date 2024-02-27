@@ -235,13 +235,16 @@ module module_inline
                write(filename, fmt='(a,i4,a1,i2.2,a1,i2.2,a1,i5.5)') trim(sdat(id)%pstrm(1)%fldlist_model(item))//'_', &
                   year, '-', month, '-', day, '-', sec
 
-               ! write field on mesh to VTK
-               !call ESMF_FieldWriteVTK(fmesh, trim(filename), rc=rc)
-               !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-
-               ! write field on grid to netCDF
-               call ESMF_FieldWrite(fgrid, fileName=trim(filename)//'.nc', rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+               ! write field
+               if (dbug > 10) then
+                  ! write field on mesh to VTK
+                  call ESMF_FieldWriteVTK(fmesh, trim(filename), rc=rc)
+                  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+               else
+                  ! write field on grid to netCDF
+                  call ESMF_FieldWrite(fgrid, fileName=trim(filename)//'.nc', rc=rc)
+                  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+               end if
             end if
          end do
       end do
