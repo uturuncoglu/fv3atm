@@ -70,6 +70,9 @@ module module_inline
       character(len=ESMF_MAXSTR) :: streamfilename, stream_name
       character(len=ESMF_MAXSTR), allocatable :: file_list(:), var_list(:,:)
 
+      ! skip if use_inline is set to false
+      if (GFS_control%use_inline == .false.) return
+
       ! query compontn to retrieve required information
       call ESMF_GridCompGet(comp, grid=grid, localPet=localPet, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
@@ -170,6 +173,9 @@ module module_inline
       type(ESMF_Field) :: fmesh
       type(ESMF_RouteHandle), save :: rh
       real(kind=kp), dimension(:,:), pointer  :: dataptr2d
+
+      ! skip if use_inline is set to false
+      if (GFS_control%use_inline == .false.) return
 
       ! query clock
       call ESMF_ClockGet(clock, currTime=currTime, rc=rc)
