@@ -459,6 +459,7 @@ if (rc /= ESMF_SUCCESS) write(0,*) 'rc=',rc,__FILE__,__LINE__; if(ESMF_LogFoundE
     do i = 1, size(exportFieldsInfo)
       call NUOPC_Advertise(exportState, &
                            StandardName=trim(exportFieldsInfo(i)%name), &
+                           SharePolicyGeomObject="share", &
                            SharePolicyField='share', rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
     end do

@@ -1488,11 +1488,12 @@ subroutine update_atmos_chemistry(state, rc)
       if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, file=__FILE__, rcToReturn=rc)) return
 
-      call cplFieldGet(state,'inst_pres_interface', farrayPtr3d=prsi, rc=localrc)
-      if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, file=__FILE__, rcToReturn=rc)) return
 
       if (GFS_Control%cplaqm) then
+
+        call cplFieldGet(state,'inst_pres_interface', farrayPtr3d=prsi, rc=localrc)
+        if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, file=__FILE__, rcToReturn=rc)) return
 
         call cplFieldGet(state,'canopy_moisture_storage', farrayPtr2d=canopy, rc=localrc)
         if (ESMF_LogFoundError(rcToCheck=localrc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -3168,7 +3169,7 @@ end subroutine update_atmos_chemistry
       end if
 
       !--- skip field if only required for chemistry
-      if (isFound .and. GFS_control%cplchm) isFound = .not.any(trim(fieldname) == chemistryFieldNames)
+      if (isFound) isFound = .not.any(trim(fieldname) == chemistryFieldNames)
 
       if (isFound) then
 !$omp parallel do default(shared) private(nb) reduction(max:localrc)

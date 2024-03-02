@@ -26,7 +26,7 @@ module module_cplfields
   !  l : model levels (3D)
   !  s : surface (2D)
   !  t : tracers (4D)
-  integer,          public, parameter :: NexportFields = 119
+  integer,          public, parameter :: NexportFields = 114
   type(ESMF_Field), target, public    :: exportFields(NexportFields)
 
   type(FieldInfo), dimension(NexportFields), public, parameter :: exportFieldsInfo = [ &
@@ -37,14 +37,11 @@ module module_cplfields
     FieldInfo("inst_temp_levels                         ", "l"), &
     FieldInfo("inst_zonal_wind_levels                   ", "l"), &
     FieldInfo("inst_merid_wind_levels                   ", "l"), &
-    FieldInfo("inst_omega_levels                        ", "l"), &
     FieldInfo("inst_tracer_mass_frac                    ", "t"), &
     FieldInfo("soil_type                                ", "s"), &
     FieldInfo("inst_pbl_height                          ", "s"), &
     FieldInfo("surface_cell_area                        ", "s"), &
     FieldInfo("inst_convective_rainfall_amount          ", "s"), &
-    FieldInfo("inst_exchange_coefficient_heat_levels    ", "l"), &
-    FieldInfo("inst_spec_humid_conv_tendency_levels     ", "l"), &
     FieldInfo("inst_ice_nonconv_tendency_levels         ", "l"), &
     FieldInfo("inst_liq_nonconv_tendency_levels         ", "l"), &
     FieldInfo("inst_cloud_frac_levels                   ", "l"), &
@@ -53,8 +50,6 @@ module module_cplfields
     FieldInfo("inst_soil_moisture_content               ", "g"), &
     FieldInfo("inst_surface_soil_wetness                ", "s"), &
     FieldInfo("inst_up_sensi_heat_flx                   ", "s"), &
-    FieldInfo("inst_lwe_snow_thickness                  ", "s"), &
-    FieldInfo("vegetation_type                          ", "s"), &
     FieldInfo("inst_vegetation_area_frac                ", "s"), &
     FieldInfo("inst_surface_roughness                   ", "s"), &
     FieldInfo("mean_zonal_moment_flx_atm                ", "s"), &
