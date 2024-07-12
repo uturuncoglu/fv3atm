@@ -2848,7 +2848,23 @@ end subroutine update_atmos_chemistry
 ! fill variables
     select case(trim(fieldName))
        case ('Si_ifrac')
-       case ('Si_vice')
+!$omp parallel do default(shared) private(i,j,nb,ix)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = atm_block%blkno(i,j)
+                ix = atm_block%ixp(i,j)
+                GFS_data(nb)%Coupling%fice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+             end do
+          end do
+       case ('Si_thick')
+!$omp parallel do default(shared) private(i,j,nb,ix)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = atm_block%blkno(i,j)
+                ix = atm_block%ixp(i,j)
+                GFS_data(nb)%Coupling%hice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+             end do
+          end do
        case ('So_omask')
 !$omp parallel do default(shared) private(i,j,nb,ix)
           do j = jsc, jec
@@ -2865,6 +2881,15 @@ end subroutine update_atmos_chemistry
                 nb = atm_block%blkno(i,j)
                 ix = atm_block%ixp(i,j)
                 GFS_data(nb)%Coupling%tsfco_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+             end do
+          end do
+       case ('Si_t')
+!$omp parallel do default(shared) private(i,j,nb,ix)
+          do j = jsc, jec
+             do i = isc, iec
+                nb = atm_block%blkno(i,j)
+                ix = atm_block%ixp(i,j)
+                GFS_data(nb)%Coupling%tice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
              end do
           end do
        case default

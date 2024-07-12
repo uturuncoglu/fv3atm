@@ -642,6 +642,9 @@ module GFS_typedefs
     !-- lake surface temperature from cdeps inline
     real (kind=kind_phys), pointer :: mask_dat   (:) => null()   !< land-sea mask from cdeps inline  
     real (kind=kind_phys), pointer :: tsfco_dat  (:) => null()   !< sfc temperature from cdeps inline
+    real (kind=kind_phys), pointer :: tice_dat   (:) => null()   !< sfc temperature over ice from cdeps inline
+    real (kind=kind_phys), pointer :: hice_dat   (:) => null()   !< sfc ice thickness from cdeps inline
+    real (kind=kind_phys), pointer :: fice_dat   (:) => null()   !< sfc ice fraction from cdeps inline
 
     contains
       procedure :: create  => coupling_create  !<   allocate array data
@@ -3179,6 +3182,12 @@ module GFS_typedefs
       Coupling%tsfco_dat = clear_val
       allocate (Coupling%mask_dat(IM))
       Coupling%mask_dat = clear_val
+      allocate (Coupling%tice_dat(IM))
+      Coupling%tice_dat = clear_val
+      allocate (Coupling%hice_dat(IM))
+      Coupling%hice_dat = clear_val
+      allocate (Coupling%fice_dat(IM))
+      Coupling%fice_dat = clear_val
     end if
 
   end subroutine coupling_create
