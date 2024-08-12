@@ -180,6 +180,11 @@ if(CDEPS_INLINE)
   target_link_libraries(fv3atm PUBLIC cdeps::cdeps)
 endif()
 
+if(BUILD_TESTING)
+  include(CTest)
+  add_subdirectory(tests)
+endif()
+
 ###############################################################################
 ### Install
 ###############################################################################
