@@ -3210,7 +3210,7 @@ end subroutine update_atmos_chemistry
     integer, intent(in) :: logunit
 
     !--- local variables
-    integer :: i, j, ix, nb
+    integer :: i, j, ix!, nb
     integer :: isc, iec, jsc, jec
 
 ! set up local dimension
@@ -3222,48 +3222,50 @@ end subroutine update_atmos_chemistry
 ! fill variables
     select case(trim(fieldName))
        case ('Si_ifrac')
-!$omp parallel do default(shared) private(i,j,nb,ix)
+!!$omp parallel do default(shared) private(i,j,nb,ix)
+!$omp parallel do default(shared) private(i,j,ix)
           do j = jsc, jec
              do i = isc, iec
-                nb = atm_block%blkno(i,j)
+                !nb = atm_block%blkno(i,j)
                 ix = atm_block%ixp(i,j)
-                GFS_data(nb)%Coupling%fice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+                GFS_coupling%fice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
              end do
           end do
        case ('Si_thick')
-!$omp parallel do default(shared) private(i,j,nb,ix)
+!$omp parallel do default(shared) private(i,j,ix)
           do j = jsc, jec
              do i = isc, iec
-                nb = atm_block%blkno(i,j)
+                !nb = atm_block%blkno(i,j)
                 ix = atm_block%ixp(i,j)
-                GFS_data(nb)%Coupling%hice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+                GFS_Coupling%hice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
              end do
           end do
        case ('So_omask')
-!$omp parallel do default(shared) private(i,j,nb,ix)
+!$omp parallel do default(shared) private(i,j,ix)
           do j = jsc, jec
              do i = isc, iec
-                nb = atm_block%blkno(i,j)
+                !nb = atm_block%blkno(i,j)
                 ix = atm_block%ixp(i,j)
-                GFS_data(nb)%Coupling%mask_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+                GFS_Coupling%mask_dat(ix) = datar82d(i-isc+1,j-jsc+1)
              end do
           end do
        case ('So_t')
-!$omp parallel do default(shared) private(i,j,nb,ix)
+!$omp parallel do default(shared) private(i,j,ix)
           do j = jsc, jec
              do i = isc, iec
-                nb = atm_block%blkno(i,j)
+                !nb = atm_block%blkno(i,j)
                 ix = atm_block%ixp(i,j)
-                GFS_data(nb)%Coupling%tsfco_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+                !GFS_Coupling(nb)%tsfco_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+                GFS_Coupling%tsfco_dat(ix) = datar82d(i-isc+1,j-jsc+1)
              end do
           end do
        case ('Si_t')
-!$omp parallel do default(shared) private(i,j,nb,ix)
+!$omp parallel do default(shared) private(i,j,ix)
           do j = jsc, jec
              do i = isc, iec
-                nb = atm_block%blkno(i,j)
+                !nb = atm_block%blkno(i,j)
                 ix = atm_block%ixp(i,j)
-                GFS_data(nb)%Coupling%tice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
+                GFS_Coupling%tice_dat(ix) = datar82d(i-isc+1,j-jsc+1)
              end do
           end do
        case default
