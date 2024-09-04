@@ -37,6 +37,9 @@ set(USE_GFSL63  ON)
 if(MOVING_NEST)
   set(MOVING_NEST ON)
 endif()
+if(HYDRO)
+  set(HYDRO ON)
+endif()
 add_subdirectory(atmos_cubed_sphere)
 target_compile_definitions(fv3 PRIVATE BYPASS_BREED_SLP_INLINE)
 
@@ -61,7 +64,11 @@ if(NOT PARALLEL_NETCDF)
 endif()
 
 if(MOVING_NEST)
-  list(APPEND _fv3atm_defs_private MOVING_NEST MOIST_CAPPA USE_COND)
+  list(APPEND _fv3atm_defs_private MOVING_NEST)
+  if(NOT HYDRO)
+    list(APPEND _fv3atm_defs_private MOIST_CAPPA USE_COND)
+  endif()
+
   if(DEBUG)
     list(APPEND _fv3atm_defs_private DEBUG)
   endif()
@@ -155,6 +162,11 @@ endif()
 
 if(OPENMP)
   target_link_libraries(fv3atm PUBLIC OpenMP::OpenMP_Fortran)
+endif()
+
+if(BUILD_TESTING)
+  include(CTest)
+  add_subdirectory(tests)
 endif()
 
 ###############################################################################
